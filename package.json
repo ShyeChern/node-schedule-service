@@ -1,0 +1,24 @@
+{
+	"name": "schedule-service",
+	"version": "1.0.0",
+	"description": "Scheduled service run in windows background",
+	"main": "index.js",
+	"scripts": {
+		"start": "nodemon index.js",
+		"test": "echo \"Error: no test specified\" && exit 1"
+	},
+	"author": "",
+	"license": "ISC",
+	"dependencies": {
+		"date-fns": "^2.25.0",
+		"dotenv": "^10.0.0",
+		"mastercard-oauth1-signer": "^1.1.5",
+		"mongoose": "^6.0.12",
+		"node-cron": "^3.0.0",
+		"puppeteer": "^10.4.0",
+		"winston": "^3.3.3"
+	},
+	"devDependencies": {
+		"nodemon": "^2.0.14"
+	}
+}
