@@ -19,6 +19,7 @@ If you are using nssm GUI:
 1. Path = _your node.exe path_
 2. Startup Directory = _your working directory path_
 3. Arguments = _your file to execute_
+4. Startup Type = Automatic (Delayed Start)
 
 
 Feel free to contact me at chern-97@hotmail.com
