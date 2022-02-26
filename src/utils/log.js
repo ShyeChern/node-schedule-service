@@ -1,5 +1,6 @@
 const { createLogger, format, transports } = require('winston');
 const { combine, timestamp, errors, colorize, align, printf } = format;
+const { constants } = require('./constants');
 
 let logger;
 /**
@@ -36,9 +37,9 @@ if (process.env.NODE_ENV !== 'production') {
 			 * Write all logs with level `info` and below to `info.log`
 			 * Write all logs to `combined.log`
 			 */
-			new transports.File({ filename: './log/error.log', level: 'error' }),
-			new transports.File({ filename: './log/info.log', level: 'info' }),
-			new transports.File({ filename: './log/combined.log' }),
+			new transports.File({ filename: `./log/${constants.ERROR_LOG_FILENAME}`, level: 'error' }),
+			new transports.File({ filename: `./log/${constants.INFO_LOG_FILENAME}`, level: 'info' }),
+			new transports.File({ filename: `./log/${constants.COMBINED_LOG_FILENAME}` }),
 		],
 	});
 }

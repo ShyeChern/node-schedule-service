@@ -1,6 +1,7 @@
+const fs = require('fs');
 const cron = require('node-cron');
 const puppeteer = require('puppeteer');
-const { format, add, sub, eachDayOfInterval, isAfter } = require('date-fns');
+const { format, add, sub, isAfter } = require('date-fns');
 const exchangeRateModel = require('./exchangeRate.model');
 const { constants } = require('../utils/constants');
 const { infoLog, errorLog } = require('../utils/log');
@@ -9,64 +10,58 @@ const getExchangeRate = () => {
 	// cron job run every hour
 	cron.schedule('0 * * * *', async () => {
 		try {
-			// get last 7 days date in db
-			const availableDate = await exchangeRateModel
-				.find()
+			// get the last date in db
+			const lastDate = await exchangeRateModel
+				.findOne()
 				.select('date')
 				.sort({ date: -1 })
-				.limit(7)
+				.limit(1)
 				.lean()
 				.then((result) => {
-					return result.map((value) => format(value.date, 'yyyy-MM-dd'));
+					return format(add(result.date, { days: 1 }), 'yyyy-MM-dd');
 				});
 
-			// get last 7 days from now and filter date not exist in db
-			const days = eachDayOfInterval({
-				start: sub(new Date(), { days: 6 }),
-				end: new Date(),
-			})
-				.map((value) => format(value, 'yyyy-MM-dd'))
-				.filter((value) => {
-					return !availableDate.includes(value);
-				});
+			const todayDate = format(new Date(), 'yyyy-MM-dd');
+			if (todayDate === lastDate) {
+				return;
+			}
 
 			// use peppeteer to open browser and call api
 			const browser = await puppeteer.launch();
 			const page = await browser.newPage();
 			await page.goto(constants.MASTERCARD_CURRENCY_LINK);
-			for (const date of days) {
-				const api = constants.MASTERCARD_CURRENCY_API(date);
-				const rate = await page.evaluate(async (api) => {
-					// action in the page
-					return await fetch(api)
-						.then((response) => response.json())
-						.then((response) => {
-							return response;
-						})
-						.catch(() => false);
-				}, api);
 
-				if (rate) {
-					await exchangeRateModel.findOneAndUpdate(
-						{
-							// filter document with same date (ignore time)
-							date: {
-								$gte: new Date(rate.data.fxDate),
-								$lt: add(new Date(rate.data.fxDate), { days: 1 }),
-							},
+			const api = constants.MASTERCARD_CURRENCY_API(lastDate);
+			const rate = await page.evaluate(async (api) => {
+				// action in the page
+				return await fetch(api)
+					.then((response) => response.json())
+					.then((response) => {
+						return response;
+					})
+					.catch(() => false);
+			}, api);
+
+			if (rate) {
+				await exchangeRateModel.findOneAndUpdate(
+					{
+						// filter document with same date (ignore time)
+						date: {
+							$gte: new Date(rate.data.fxDate),
+							$lt: add(new Date(rate.data.fxDate), { days: 1 }),
 						},
-						{
-							fromCurrency: rate.data.transCurr,
-							toCurrency: rate.data.crdhldBillCurr,
-							rate: rate.data.conversionRate,
-							date: rate.data.fxDate,
-						},
-						{
-							upsert: true,
-						}
-					);
-					infoLog(`Update exchange rate on ${rate.data.fxDate} successfully`);
-				}
+					},
+					{
+						fromCurrency: rate.data.transCurr,
+						toCurrency: rate.data.crdhldBillCurr,
+						rate: rate.data.conversionRate,
+						date: rate.data.fxDate,
+					},
+					{
+						upsert: true,
+					}
+				);
+				infoLog(`Update exchange rate on ${rate.data.fxDate} successfully`);
 			}
 
 			await browser.close();
@@ -141,7 +136,56 @@ const getPreviousExchangeRate = () => {
 	});
 };
 
-module.exports.mastercard = () => {
+const housekeeping = async () => {
+	// cron job run every hour (xx:15) in 1st day of month
+	cron.schedule('15 * * * *', async () => {
+		try {
+			const yearMonth = format(sub(new Date(), { months: 1 }), 'yyyy/MM');
+			const folderPath = `./log/${yearMonth}`;
+			if (!fs.existsSync(folderPath)) {
+				fs.mkdirSync(folderPath, { recursive: true });
+
+				// copy file to backup
+				fs.copyFileSync(
+					`./log/${constants.ERROR_LOG_FILENAME}`,
+					`${folderPath}/${constants.ERROR_LOG_FILENAME}`
+				);
+				fs.copyFileSync(
+					`./log/${constants.INFO_LOG_FILENAME}`,
+					`${folderPath}/${constants.INFO_LOG_FILENAME}`
+				);
+				fs.copyFileSync(
+					`./log/${constants.COMBINED_LOG_FILENAME}`,
+					`${folderPath}/${constants.COMBINED_LOG_FILENAME}`
+				);
+
+				// truncate current file
+				fs.truncateSync(`./log/${constants.ERROR_LOG_FILENAME}`);
+				fs.truncateSync(`./log/${constants.INFO_LOG_FILENAME}`);
+				fs.truncateSync(`./log/${constants.COMBINED_LOG_FILENAME}`);
+
+				// keep only past 3 months
+				const prevDate = sub(new Date(), { months: 4 });
+				const prevYearMonthPath = `./log/${format(prevDate, 'yyyy/MM')}`;
+				if (fs.existsSync(prevYearMonthPath)) {
+					fs.rmSync(prevYearMonthPath, { recursive: true, force: true });
+					infoLog(`Remove ${prevYearMonthPath} successfully`);
+				}
+				const prevYearPath = `./log/${format(prevDate, 'yyyy')}`;
+				if (fs.existsSync(prevYearPath) && fs.readdirSync(prevYearPath).length === 0) {
+					fs.rmdirSync(prevYearPath);
+					infoLog(`Remove ${prevYearPath} successfully`);
+				}
+				infoLog('Housekeeping successfully');
+			}
+		} catch (err) {
+			errorLog(err);
+		}
+	});
+};
+
+module.exports.mastercard = async () => {
 	getExchangeRate();
+	housekeeping();
 	// getPreviousExchangeRate();
 };
