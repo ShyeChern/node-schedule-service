@@ -8,7 +8,7 @@ const { logs } = require('./src/logs/log.service');
 (async () => {
 	try {
 		mastercard();
-		leetcode();
+		// leetcode();
 		logs();
 		infoLog('Start service');
 	} catch (e) {

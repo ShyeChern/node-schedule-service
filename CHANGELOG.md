@@ -1,5 +1,10 @@
 # CHANGELOG
 
+## v1.2.1 (2022-12-03)
+### Fix
+* Add setTimeout to ensure page loaded
+* Bypass leetcode recaptcha
+
 ## v1.2.0 (2022-11-05)
 ### Feature
 * Add new login job for leetcode
